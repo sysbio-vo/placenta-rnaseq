@@ -1,0 +1,128 @@
+import pandas as pd
+
+configfile: "config.yaml"
+
+ACCESSION = list(pd.read_csv(config["samples"])["sample"].values)
+READS=["_1","_2"]
+#READS=["_1"]
+
+rule all:
+    input:
+        counts="counts/all.tsv",
+        deseq2all="deseq2/all.rds",
+        diffexp=expand(["results/diffexp/{contrast}.diffexp.tsv",
+                "results/diffexp/{contrast}.ma-plot.svg"],
+               contrast=config["diffexp"]["contrasts"]),
+        pca_res="results/pca.svg",
+        pack_res="results.tar.gz"
+
+
+rule SRA_Import:
+    output:
+        temp("sra_files/{ACCESSION}/{ACCESSION}.sra")
+    params:
+        progress=1,
+        outputdirectory="sra_files"
+    shell:
+        "set +eu && source activate snakemake-rnaseq && "
+        "prefetch -a '~/.aspera/connect/bin/ascp|~/.aspera/connect/etc/asperaweb_id_dsa.openssh'"
+        " -p {params.progress} --output-directory {params.outputdirectory} {wildcards.ACCESSION}"
+
+rule SRA_fasta:
+    input:
+        "sra_files/{ACCESSION}/{ACCESSION}.sra"
+    output:
+        temp("fastq_files/{ACCESSION}.sra_1.fastq"),
+        temp("fastq_files/{ACCESSION}.sra_2.fastq")
+    params:
+        outputdirectory="fastq_files"
+    threads:
+        8
+    shell:
+        "set +eu && source activate snakemake-rnaseq && "
+        "fasterq-dump {input} -O {params.outputdirectory}"
+
+rule fastq_qc:
+    input:
+        fa1="fastq_files/{ACCESSION}.sra_1.fastq",
+	fa2="fastq_files/{ACCESSION}.sra_2.fastq"
+    output:
+        fa1=temp("fastpqc_files/{ACCESSION}.sra_1_trimmed.fastq"),
+        fa2=temp("fastpqc_files/{ACCESSION}.sra_2_trimmed.fastq"),
+        reporthtml="fastp_reports/{ACCESSION}_fastp_report.html",
+	reportjson="fastp_reports/{ACCESSION}_fastp_report.json"
+    params:
+        outputdirectory="fastpqc_files"
+    threads:
+        8
+    shell:
+        "set +eu && source activate snakemake-rnaseq && "
+
+        "fastp "
+        "-V -w 4 "
+        "--cut_front --cut_front_mean_quality 30 "
+        "- R '{wildcards.ACCESSION} fastp report' "
+        "--html {output.reporthtml} "
+        "--json {output.reportjson} "
+        "-i {input.fa1} "
+        "-o {output.fa1} "
+        "-I {input.fa2} "
+        "-O {output.fa2}"
+
+
+
+rule align_STAR:
+    input:
+        fast1= "fastpqc_files/{ACCESSION}.sra_1_trimmed.fastq",
+        fast2= "fastpqc_files/{ACCESSION}.sra_2_trimmed.fastq"
+    output:
+        alignedfile = "aligned_star/{ACCESSION}/Aligned.sortedByCoord.out.bam",
+	rpgfile= "aligned_star/{ACCESSION}/ReadsPerGene.out.tab",
+    params:
+        outputdirectory="aligned_star",
+        gtffile="hg38/gencode.v34.primary_assembly.annotation.gtf"
+    threads:
+        24
+    shell:
+        "set +eu && source activate snakemake-rnaseq && "
+        "STAR --genomeDir hg38_index "
+        "--runThreadN {threads} "
+        "--readFilesIn {input.fast1} "
+        "{input.fast2} "
+        "--outFileNamePrefix {params.outputdirectory}/{wildcards.ACCESSION}/ "
+        "--outSAMtype BAM SortedByCoordinate "
+        "--outSAMunmapped Within "
+        "--outSAMattributes Standard "
+        "--quantMode GeneCounts --sjdbGTFfile {params.gtffile}"
+
+
+def get_strandness(units):
+    if "strandedness" in units.columns:
+        return units["strandedness"].tolist()
+    else:
+        strand_list=["none"]
+        return strand_list*units.shape[0]
+
+
+rule count_matrix:
+    input:
+        expand("aligned_star/{accession}/ReadsPerGene.out.tab", accession=ACCESSION)
+    output:
+        "counts/all.tsv"
+    params:
+        samples=ACCESSION
+    conda:
+        "envs/pandas.yaml"
+    script:
+        "count-matrix.py"
+
+rule tar_results:
+    input:
+        res_fol = "counts/"
+    output:
+        "results.tar.gz"
+    shell:
+        "tar -czf {output} {input.res_fol}"
+
+
+

@@ -1,0 +1,20 @@
+##STAR index generation
+#PBS -l nodes=a29-0
+#PBS -k oe
+#PBS -l walltime=24:00:00
+#PBS -M dantistnfs@gmail.com
+#PBS -m abe
+#PBS -N sample
+## Specify the shell to be bash
+#PBS -S /bin/bash
+
+source activate snakemake-rnaseq
+echo STAR index generation task started
+STAR --runThreadN 16 \
+--runMode genomeGenerate \
+--genomeDir hg38_index \
+--genomeFastaFiles ./hg38/GRCh38.primary_assembly.genome.fa \
+--sjdbGTFfile ./hg38/gencode.v34.primary_assembly.annotation.gtf \
+--sjdbOverhang 149
+
+
