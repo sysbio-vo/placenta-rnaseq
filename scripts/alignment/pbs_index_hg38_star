@@ -4,7 +4,7 @@
 #PBS -l walltime=24:00:00
 #PBS -M dantistnfs@gmail.com
 #PBS -m abe
-#PBS -N sample
+#PBS -N STAR processing
 ## Specify the shell to be bash
 #PBS -S /bin/bash
 

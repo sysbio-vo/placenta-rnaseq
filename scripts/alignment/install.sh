@@ -23,8 +23,3 @@ eval "$(./miniconda/bin/conda shell.bash hook)"
 
 conda env create --name snakemake-rnaseq --file environment.yaml
 conda activate snakemake-rnaseq
-
-
-
-
-qsub pbs_index_hg_38_star
