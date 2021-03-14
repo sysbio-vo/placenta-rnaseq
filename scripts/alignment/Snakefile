@@ -1,18 +1,13 @@
 import pandas as pd
 
-configfile: "config.yaml"
-
-ACCESSION = list(pd.read_csv(config["samples"])["sample"].values)
+metadata = pd.read_csv("../../metadata/rna-data-placenta.csv")
+metadata = metadata[metadata["BioProject"] != "PRJNA0"] # only use samples that have rawdata
+ACCESSION = list(metadata["sample"].values)
 READS=["_1","_2"]
 
 rule all:
     input:
         counts="counts/all.tsv",
-        deseq2all="deseq2/all.rds",
-        diffexp=expand(["results/diffexp/{contrast}.diffexp.tsv",
-                "results/diffexp/{contrast}.ma-plot.svg"],
-               contrast=config["diffexp"]["contrasts"]),
-        pca_res="results/pca.svg",
         pack_res="results.tar.gz"
 
 
