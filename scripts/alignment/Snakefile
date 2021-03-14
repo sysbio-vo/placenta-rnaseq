@@ -4,7 +4,6 @@ configfile: "config.yaml"
 
 ACCESSION = list(pd.read_csv(config["samples"])["sample"].values)
 READS=["_1","_2"]
-#READS=["_1"]
 
 rule all:
     input:
@@ -108,7 +107,7 @@ rule count_matrix:
     input:
         expand("aligned_star/{accession}/ReadsPerGene.out.tab", accession=ACCESSION)
     output:
-        "counts/all.tsv"
+        "counts/transcripts_count_matrix.csv"
     params:
         samples=ACCESSION
     conda:

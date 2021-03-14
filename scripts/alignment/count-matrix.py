@@ -11,4 +11,4 @@ for t, sample in zip(counts, snakemake.params.samples):
 
 matrix = pd.concat(counts, axis=1)
 matrix.index.name = "gene"
-matrix.to_csv(snakemake.output[0], sep="\t")
+matrix.to_csv(snakemake.output[0])

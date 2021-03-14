@@ -1,4 +1,4 @@
-TODO: BITP snakemake pipeline howto
+Running pipeline:
 
 0. Get reqs and connect to BITP cluster:
 
@@ -40,3 +40,6 @@ Some notes for command above:
  - -j number of jobs
  - --latency-wait - because steps with downloading data takes too long, wait 100 minutes before marking job as incomplete
 
+
+Output:
+in counts folder should be file named "transcripts_count_matrix.csv" which contains different genes in rows and samples in columns, each cell is reads count per gene outputed by STAR.
