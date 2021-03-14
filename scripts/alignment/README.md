@@ -40,6 +40,13 @@ Some notes for command above:
  - -j number of jobs
  - --latency-wait - because steps with downloading data takes too long, wait 100 minutes before marking job as incomplete
 
+5. Optional: Generate multiqc report by running
+```
+chmod +x install.sh
+pack_multiqc.sh
+```
+It will output multiqc_report.tar.gz which can be downlaoded to local machine for further investigation.
+
 
 Output:
 in counts folder should be file named "transcripts_count_matrix.csv" which contains different genes in rows and samples in columns, each cell is reads count per gene outputed by STAR.
