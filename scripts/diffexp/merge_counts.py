@@ -2,8 +2,8 @@ import glob
 import pandas as pd
 
 
-csv_files = glob.glob("./counts/*.csv")
-tsv_files = glob.glob("./counts/*.tsv")
+csv_files = glob.glob("./raw_counts/*.csv")
+tsv_files = glob.glob("./raw_counts/*.tsv")
 
 files_to_merge = []
 
@@ -27,4 +27,4 @@ for f_merge in files_to_merge[1:]:
 
 start_file = start_file.fillna(0)
 start_file = start_file[~start_file.index.duplicated(keep='first')]
-start_file.to_csv("merged_counts.csv", sep=',')
+start_file.to_csv("./counts/merged_counts.csv")
