@@ -9,6 +9,7 @@ files_to_merge = []
 
 for csv_file in csv_files:
     df = pd.read_csv(csv_file)
+    df["gene"] = df["gene"].str.split(".").str[0]
     df = df.set_index("gene", drop=True)
     files_to_merge.append(df)
 
