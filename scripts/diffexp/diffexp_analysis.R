@@ -1,3 +1,5 @@
+BiocManager::install(c("DESeq2","edgeR","sva","org.Hs.eg.db","EnsDb.Hsapiens.v86","vsn","hexbin"))
+devtools::install_github("zhangyuqing/sva-devel")
 library("edgeR")
 library("sva")
 library("ggfortify")
@@ -5,21 +7,19 @@ library("EnsDb.Hsapiens.v86")
 library("org.Hs.eg.db")
 library("vsn")
 library("DESeq2")
-#BiocManager::install("DESeq2")
-#BiocManager::install("org.Hs.eg.db")
-#BiocManager::install("EnsDb.Hsapiens.v86")
-#BiocManager::install("vsn")
-#BiocManager::install("hexbin")
+library("ggfortify")
+library("reshape2")
+
 
 # Session -> Set working directory -> To source file location
-
+setwd("~/placenta-rnaseq/scripts/diffexp")
 cts <- read.table("counts/merged_counts.csv", sep = ",", header=TRUE, row.names="gene", check.names=TRUE)
 metadata <- read.table("../../metadata/rna-data-placenta.csv", sep = ",", header=TRUE, row.names="sample", check.names=TRUE)
 
 cts <- cts[,rownames(metadata)] #REORDER JUST IN CASE
 
 
-require(reshape2)
+
 temp <- cts['ENSG00000229807',]
 temp$row.names<-rownames(temp)
 temp <- melt(temp,"row.names")
@@ -65,9 +65,9 @@ joined_symbol_descriptions <- merge(protein_coding_geneids, gene_descriptions, b
 cts_protein_coding <- cts[rownames(cts) %in% joined_symbol_descriptions$GENEID,]
 
 
+batch_num <- 3
 
-
-meta1 = metadata[batches==1,]#$clinical_information[batches==3]
+meta1 = metadata[batches==batch_num,]#$clinical_information[batches==3]
 cts_protein_coding_1 = cts_protein_coding[,rownames(meta1)] # reorders to correct order
 
 
@@ -79,11 +79,13 @@ meanSdPlot(as.matrix(cts_protein_coding_1), ranks = FALSE)
 log.cts.one <- log2(cts_protein_coding_1 + 1)
 meanSdPlot(as.matrix(log.cts.one), ranks = FALSE)
 
-
-
 # DESEQ2
 library("DESeq2")
-dds <- DESeqDataSetFromMatrix(countData=cts_protein_coding_1, colData=meta1, design = ~ clinical_information + sex)
+if(length(unique(meta1['sex'])) == 1){ #
+  dds <- DESeqDataSetFromMatrix(countData=cts_protein_coding_1, colData=meta1, design = ~ clinical_information)
+}else{
+  dds <- DESeqDataSetFromMatrix(countData=cts_protein_coding_1, colData=meta1, design = ~ clinical_information + sex)
+}
 
 #  The rlog tends to work well on small datasets (n < 30), potentially outperforming the VST when
 # there is a wide range of sequencing depth across samples (an order of magnitude difference). 
@@ -127,14 +129,22 @@ pheatmap(samplePoisDistMatrix,
          col = colors)
 
 # PCA
-plotPCA(vsd, intgroup = c("clinical_information","sex"))
+plotPCA(vsd, intgroup = c("clinical_information","sex"), ntop=1000)
+plotPCA(vsd, intgroup = c("clinical_information"), ntop=18000) 
 
 
 
 # Differential expression
 dds <- DESeq(dds)
 
-res <- results(dds, contrast=c("clinical_information","preeclampsia","control"))
+dds_renamed <- merge(assay(dds), joined_symbol_descriptions[c('GENEID','SYMBOL')], by.x = 0, 
+                                 by.y = "GENEID", all.x = TRUE, all.y = FALSE)
+
+#write.csv(dds_renamed, file="geneexp_normalized.csv")
+
+
+
+res <- results(dds, contrast=c("clinical_information","control","preeclampsia"))
 res
 
 
@@ -176,9 +186,13 @@ pheatmap(mat, annotation_col = anno)
 # diffexpressed gene heatmap
 
 res_dropped_na <- res[!is.na(res$padj),]
-topDiffExpGenes <- head(res_dropped_na[order(res_dropped_na$padj, decreasing = FALSE),], 50)
-mat  <- assay(vsd)[,vsd$sex == "female"][rownames(topDiffExpGenes), ]
-mat  <- mat - rowMeans(mat)
+res_dropped_na <- res_dropped_na[res_dropped_na$padj < 0.05,]
+res_dropped_na
+topDiffExpGenes <- head(res_dropped_na[order(res_dropped_na$padj, decreasing = FALSE),], 30)
+#topDiffExpGenes <- res_dropped_na[order(res_dropped_na$padj, decreasing = FALSE),]
+mat  <- assay(vsd)[,vsd$sex == "male"][rownames(topDiffExpGenes), ]
+#mat  <- assay(vsd)[rownames(topDiffExpGenes), ]
+mat  <- (mat - rowMeans(mat))/rowMax(mat)
 
 mat_genenames <- merge(mat, joined_symbol_descriptions[c('GENEID','SYMBOL')], by.x = 0, 
                         by.y = "GENEID", all.x = TRUE, all.y = FALSE)
@@ -189,17 +203,16 @@ mat_genenames$Row.names <- NULL
 mat_genenames$SYMBOL <- NULL
 
 anno <- as.data.frame(colData(vsd)[, c("clinical_information","sex")])
-pheatmap(mat_genenames, annotation_col = anno)
+pheatmap(mat_genenames, annotation_col = anno)#,cutree_cols = 2)
 
 
+topDiffExpGenes_renamed <- merge(as.data.frame(topDiffExpGenes), joined_symbol_descriptions[c('GENEID','SYMBOL')], by.x = 0, 
+                       by.y = "GENEID", all.x = TRUE, all.y = FALSE)
+
+#write.csv(topDiffExpGenes_renamed, file="top_diff_exp_results.csv")
 
 
-
-
-
-
-
-res$p[is.na(res$pvalue)] <- 0
+fres$p[is.na(res$pvalue)] <- 0
 res[res$pvalue >= 0.05,]
 
 ### CHECKING FOR DUPLICATES
