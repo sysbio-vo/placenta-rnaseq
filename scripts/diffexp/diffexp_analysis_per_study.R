@@ -67,45 +67,57 @@ joined_symbol_descriptions <- merge(protein_coding_geneids, gene_descriptions, b
 cts_protein_coding <- cts[rownames(cts) %in% joined_symbol_descriptions$GENEID,]
 
 
-batch_num <- 2
 
-if (FALSE){
-metadata = metadata[batches==batch_num,]#$clinical_information[batches==3]
-cts_protein_coding = cts_protein_coding[,rownames(metadata)] # reorders to correct order
-batches = batches[batches == batch_num]
-}else{
-  metadata = metadata[batches!=batch_num,]#$clinical_information[batches==3]
-  cts_protein_coding = cts_protein_coding[,rownames(metadata)] # reorders to correct order
-  batches = batches[batches != batch_num]
-  adjusted_counts <- cts_protein_coding
-  
-  # COMBAT SEQ
-  #covar_mat <- cbind(metadata['clinical_information'], metadata['sex'])
-  #adjusted_counts <- ComBat_seq(as.matrix(cts_protein_coding), batch=metadata$BioProject, group=NULL, covar_mod=covar_mat)
-  #adjusted_counts <- ComBat_seq(cts_protein_coding, batch=batches, group=metadata['clinical_information'])
-}
-
-# DESEQ2
-if(length(unique(metadata['sex'])) == 1){ #
-  dds <- DESeqDataSetFromMatrix(countData=cts_protein_coding, colData=metadata, design = ~ clinical_information)
-}else{
-  if(length(unique(metadata['SRA.Study'])) == 1){
-    dds <- DESeqDataSetFromMatrix(countData=cts_protein_coding, colData=metadata, design = ~ sex + clinical_information)
-  }else{
-    #dds <- DESeqDataSetFromMatrix(countData=cts_protein_coding, colData=metadata, design = ~ SRA.Study + sex + clinical_information)
-    dds <- DESeqDataSetFromMatrix(countData=cts_protein_coding, colData=metadata, design = ~ sex + clinical_information)
+for(batch_num in 1:3) {
+  print(paste("Processing batch", batch_num))
+  for(use_sex in c(TRUE,FALSE)) {
+    if (TRUE){
+      sample_metadata = metadata[batches==batch_num,]#$clinical_information[batches==3]
+      sample_cts_protein_coding = cts_protein_coding[,rownames(sample_metadata)] # reorders to correct order
+      sample_batches = batches[batches == batch_num]
+    }else{
+      sample_metadata = metadata[batches!=batch_num,]#$clinical_information[batches==3]
+      sample_cts_protein_coding = cts_protein_coding[,rownames(sample_metadata)] # reorders to correct order
+      sample_batches = batches[batches != batch_num]
+      sample_adjusted_counts <- cts_protein_coding
+    }
+    
+    # DESEQ2
+    if(length(unique(metadata['sex'])) == 1){ #
+      dds <- DESeqDataSetFromMatrix(countData=sample_cts_protein_coding, colData=sample_metadata, design = ~ clinical_information)
+    }else {
+      if(length(unique(metadata['SRA.Study'])) == 1){
+        if(use_sex){
+          dds <- DESeqDataSetFromMatrix(countData=sample_cts_protein_coding, colData=sample_metadata, design = ~ sex + clinical_information)
+        }else{
+          dds <- DESeqDataSetFromMatrix(countData=sample_cts_protein_coding, colData=sample_metadata, design = ~ clinical_information)
+        }
+      }else{
+        #dds <- DESeqDataSetFromMatrix(countData=sample_cts_protein_coding, colData=sample_metadata, design = ~ SRA.Study + sex + clinical_information)
+        dds <- DESeqDataSetFromMatrix(countData=sample_cts_protein_coding, colData=sample_metadata, design = ~ sex + clinical_information)
+      }
+    }
+    # VST
+    vsd <- vst(dds,blind=FALSE)
+    # DDS
+    dds <- DESeq(dds)
+    res <- results(dds, contrast=c("clinical_information","control","preeclampsia"))
+    
+    
+    res_dropped_na <- res[!is.na(res$padj),]
+    res_dropped_na <- res_dropped_na[res_dropped_na$padj < 0.05,]
+    topDiffExpGenes <- res_dropped_na[order(res_dropped_na$padj, decreasing = FALSE),]
+    
+    
+    topDiffExpGenes_renamed <- merge(as.data.frame(topDiffExpGenes), joined_symbol_descriptions[c('GENEID','SYMBOL')], by.x = 0, 
+                                     by.y = "GENEID", all.x = TRUE, all.y = FALSE)
+    write.csv(topDiffExpGenes_renamed, file=paste("batch", batch_num, "used_sex", use_sex, "top_diff_exp.csv"))
   }
 }
 
-# VST
-vsd <- vst(dds,blind=FALSE)
-meanSdPlot(assay(vsd), ranks = FALSE)
-
-# DDS
-dds <- DESeq(dds)
 
 
-res <- results(dds, contrast=c("clinical_information","control","preeclampsia"))
+
 
 
 pca_counts <- t(assay(vsd)[rowVars(assay(vsd)) > 0,])
@@ -253,11 +265,6 @@ pheatmap(mat, annotation_col = anno)
 
 # diffexpressed gene heatmap
 
-res_dropped_na <- res[!is.na(res$padj),]
-res_dropped_na <- res_dropped_na[res_dropped_na$padj < 0.05,]
-res_dropped_na
-#topDiffExpGenes <- head(res_dropped_na[order(res_dropped_na$padj, decreasing = FALSE),], 30)
-topDiffExpGenes <- res_dropped_na[order(res_dropped_na$padj, decreasing = FALSE),]
 #mat  <- assay(vsd)[,vsd$sex == "female"][rownames(topDiffExpGenes), ]
 mat  <- assay(dds)[rownames(topDiffExpGenes), ]
 
@@ -285,10 +292,6 @@ anno <- as.data.frame(colData(vsd)[, c("clinical_information","sex")])
 pheatmap(mat_genenames, annotation_col = anno)#,cutree_cols = 2)
 
 
-topDiffExpGenes_renamed <- merge(as.data.frame(topDiffExpGenes), joined_symbol_descriptions[c('GENEID','SYMBOL')], by.x = 0, 
-                       by.y = "GENEID", all.x = TRUE, all.y = FALSE)
-topDiffExpGenes_renamed
-write.csv(topDiffExpGenes_renamed, file="top_diff_exp_results_model_unincludes_SRA.csv")
 
 
 fres$p[is.na(res$pvalue)] <- 0
